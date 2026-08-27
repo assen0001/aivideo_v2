@@ -49,27 +49,7 @@
 
 ## 🏗️ 系统架构
 
-```mermaid
-flowchart LR
-    subgraph FE["前端 video-frontend (Vue 3 + Vite · :5173)"]
-        A[配置页] --> B[进度页] --> C[结果页]
-    end
-    subgraph BE["后端 video-platform (FastAPI · :8000)"]
-        R[API 路由] --> G[GenerationManager 编排]
-        G --> S1[ScriptWriter 剧本创作]
-        G --> S2[ImageCreator 文生图]
-        G --> S3[VideoCreator 图生视频]
-        G --> S4[VoiceActor 语音合成]
-        G --> S5[VideoComposer 视频合成]
-    end
-    FE <-->|REST API| BE
-    S1 -->|OpenAI 兼容 API| Qwen[(Qwen LLM)]
-    S2 -->|ComfyUI API| C1[(ComfyUI · T2I)]
-    S3 -->|ComfyUI API| C2[(ComfyUI · I2V)]
-    S4 -->|IndexTTS API| TTS[(IndexTTS)]
-    S5 -->|FFmpeg| OUT[output/ 成品视频]
-    R --> DB[(SQLite · aivideo.db)]
-```
+![系统架构图](doc/images/architecture.png)
 
 ### 五步生成管线
 
