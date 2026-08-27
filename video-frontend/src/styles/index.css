@@ -1,0 +1,211 @@
+/* V2.0 全局样式 — 温暖亲和视觉体系（需求 §6.1 CSS 变量） */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #fbf6ec;
+  --bg-soft: #f1e7d4;
+  --surface: #ffffff;
+  --surface-2: #f7eedb;
+  --primary: #b27545;
+  --primary-hover: #955c33;
+  --accent: #dd7a25;
+  --accent-hover: #c3651a;
+  --success: #5d8b4a;
+  --warning: #c99527;
+  --danger: #b54d3a;
+  --text: #2e251c;
+  --text-2: #4f4234;
+  --text-3: #786a58;
+  --border: #e3d4ba;
+  --shadow-sm: 0 2px 8px rgba(120, 80, 40, 0.12);
+  --shadow-md: 0 6px 20px rgba(120, 80, 40, 0.16);
+  --shadow-lg: 0 16px 40px rgba(120, 80, 40, 0.22);
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --radius-full: 999px;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'MiSans', 'HarmonyOS Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  /* 整体字号等比放大 2 档（rem-based 工具类同步放大） */
+  font-size: 18px;
+  line-height: 1.7;
+}
+
+/* 背景纵深：米白底 + 左上暖光晕 + 噪点纹理 */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(600px 400px at 8% 0%, rgba(224, 138, 60, 0.12), transparent 65%),
+    radial-gradient(800px 500px at 100% 100%, rgba(192, 133, 82, 0.08), transparent 60%);
+}
+
+#app {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+}
+
+/* 呼吸光点（创作流程条） */
+@keyframes breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(224, 138, 60, 0.45);
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(224, 138, 60, 0);
+    opacity: 0.75;
+  }
+}
+.breathe {
+  animation: breathe 1.6s ease-in-out infinite;
+}
+
+/* 骨架屏 */
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--border) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Markdown 渲染主题（暖色） */
+.md-body {
+  color: var(--text);
+  line-height: 1.7;
+  word-break: break-word;
+}
+.md-body h1,
+.md-body h2,
+.md-body h3,
+.md-body h4 {
+  color: var(--text);
+  font-weight: 700;
+  margin: 1.2em 0 0.5em;
+  line-height: 1.35;
+}
+.md-body h1 {
+  font-size: 1.6em;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.3em;
+}
+.md-body h2 {
+  font-size: 1.3em;
+}
+.md-body h3 {
+  font-size: 1.12em;
+}
+.md-body p {
+  margin: 0.6em 0;
+}
+.md-body ul,
+.md-body ol {
+  padding-left: 1.5em;
+  margin: 0.6em 0;
+}
+.md-body li {
+  margin: 0.25em 0;
+}
+.md-body blockquote {
+  border-left: 4px solid var(--accent);
+  background: var(--surface-2);
+  margin: 0.8em 0;
+  padding: 0.4em 1em;
+  color: var(--text-2);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.md-body code {
+  background: var(--surface-2);
+  color: var(--primary-hover);
+  padding: 0.15em 0.4em;
+  border-radius: 6px;
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 0.9em;
+}
+.md-body pre {
+  background: #2e2720;
+  color: #f6efe6;
+  padding: 1em;
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  margin: 0.8em 0;
+}
+.md-body pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+.md-body table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.8em 0;
+}
+.md-body th,
+.md-body td {
+  border: 1px solid var(--border);
+  padding: 0.45em 0.8em;
+  text-align: left;
+}
+.md-body th {
+  background: var(--surface-2);
+}
+.md-body img {
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+}
+.md-body hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.5em 0;
+}
+
+/* 通用滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
+
+/* 可见焦点态 */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 减少动态效果偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .breathe,
+  .skeleton {
+    animation: none !important;
+  }
+  * {
+    transition-duration: 0.01ms !important;
+  }
+}
