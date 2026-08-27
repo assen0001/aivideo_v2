@@ -182,3 +182,19 @@ aivideo_v2/
 本项目基于 [MIT License](LICENSE) 开源。
 
 > 提示：本项目集成的外部 AI 服务（Qwen / ComfyUI / IndexTTS）及分发组件（FFmpeg）均为各自独立的开源项目，请遵循其对应的许可证条款。
+
+---
+
+## 📬 联系我们
+
+| 项 | 信息 |
+|:--|:-----|
+| 作者 | assen（阿森） |
+| 官网（演示平台） | https://aivideo.site |
+| B站演示教程 | https://space.bilibili.com/1105978078/upload/video |
+| GitHub 项目 | https://github.com/assen0001/aivideo_v2 |
+| 技术支持 | 有任何问题欢迎联系我们，提供技术支持 |
+
+**微信扫码加入交流群：**
+
+<img src="https://www.aivideo.site/static/images/wx001.jpg" width="100" height="100" alt="微信交流群二维码" />
