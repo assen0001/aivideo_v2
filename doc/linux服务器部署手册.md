@@ -51,6 +51,13 @@ FastAPI 后端（gunicorn + UvicornWorker，仅监听 127.0.0.1:8000，不暴露
 - CentOS 7 官方源无 ffmpeg。下载 Linux 静态版（johnvansickle.com 的 ffmpeg 静态构建）。
 - 将 `ffmpeg`、`ffprobe` 放到 `/usr/local/bin/` 并加执行权限，或加入 `PATH`。
 - ⚠️ 代码只认系统命令名 `ffmpeg`，**不要**把 Windows 的 `ffmpeg.exe` 放进 `video-platform/bin/`（那是 Windows 专用）。
+- ✅ 字幕字体（V2.7 起）：**无需在服务器安装任何中文字体**。项目已内置思源黑体
+  `video-platform/assets/fonts/SourceHanSansSC-Regular.otf`（Apache 2.0 可商用），
+  ffmpeg 烧字幕时通过 `subtitles=...:fontsdir=相对路径` 直接从项目内加载。
+  前提：ffmpeg 静态构建需**带 libass 和 fontconfig**（johnvansickle 默认版已含，
+  用 `ffmpeg -version` 看输出里有 `--enable-libass --enable-fontconfig` 即 OK）。
+  若历史视频曾出现中文字幕显示为方块（豆腐字），就是系统缺中文字体导致，
+  V2.7 内置字体方案后重跑生成即可恢复。
 
 ### 2.3 Node.js（仅本机构建前端用，服务器无需安装）
 - 前端在本机（Windows / macOS）执行 `npm run build` 产出 `dist/`，再上传 `dist/` 即可，服务器不需要 Node。

@@ -22,6 +22,16 @@ from services.ffmpeg_utils import get_ffmpeg_path, get_ffprobe_path
 
 logger = logging.getLogger(__name__)
 
+# ============ 字幕字体（V2.7：内置字体，不依赖服务器系统字体） ============
+# 思源黑体简体 Regular（Apache 2.0 可商用），随仓库分发在 video-platform/assets/fonts/。
+# ffmpeg subtitles 滤镜通过 fontsdir 直接加载项目内字体，杜绝服务器缺中文字体导致
+# 字幕显示豆腐块的问题。Fontname 用字体内部英文 family 名，跨 fontconfig 环境稳定匹配。
+FONTS_DIR = os.path.join(_root, "assets", "fonts")
+SUBTITLE_FONT_NAME = "Source Han Sans SC"
+# ffmpeg 滤镜参数转义：Windows 盘符冒号 / 分隔符冒号需转义；路径统一用正斜杠。
+def _escape_filter_arg(p: str) -> str:
+    return p.replace("\\", "/").replace(":", "\\:").replace(",", "\\,")
+
 # 分辨率映射（与 video_creator.py 同步）
 RESOLUTION_MAP = {
     (VideoRatio.R16_9, VideoResolution.SD_640_LANDSCAPE): (640, 360),
@@ -241,7 +251,11 @@ class VideoComposer:
     def _final_render(self, video_path: str, audio_path: Optional[str],
                       output_path: str, subtitle_text: Optional[str] = None,
                       temp_dir: Optional[str] = None):
-        """最终合成：拼接视频（自带逐镜音轨） + 字幕内嵌（V2.3：不再混合外部音轨）"""
+        """最终合成：拼接视频（自带逐镜音轨） + 字幕内嵌（V2.3：不再混合外部音轨）
+
+        V2.7：字幕烧录强制指定项目内置字体目录 fontsdir=FONTS_DIR，
+        libass 直接从项目 fonts/ 加载思源黑体，不依赖服务器系统字体。
+        """
         cmd = [self.ffmpeg, "-i", video_path]
 
         ass_path = None
@@ -251,14 +265,23 @@ class VideoComposer:
                 ass_path = os.path.join(temp_dir, "subtitles.ass")
                 with open(ass_path, "w", encoding="utf-8") as f:
                     f.write(subtitle_text)
-                cmd.extend(["-vf", "subtitles=subtitles.ass"])
+                # fontsdir 用相对路径（相对 ffmpeg 的 cwd=temp_dir）：
+                # 绝对路径含盘符冒号（D:\:）会被 ffmpeg filter 解析吃掉，Windows 必炸。
+                fonts_rel = os.path.relpath(FONTS_DIR, temp_dir).replace(os.sep, "/")
+                cmd.extend([
+                    "-vf",
+                    f"subtitles=subtitles.ass:fontsdir={fonts_rel}",
+                ])
                 ffmpeg_cwd = temp_dir
             else:
                 import tempfile
                 with tempfile.NamedTemporaryFile(suffix=".ass", mode="w", delete=False, encoding="utf-8") as f:
                     f.write(subtitle_text)
                     ass_path = f.name
-                cmd.extend(["-vf", f"subtitles='{ass_path}'"])
+                cmd.extend([
+                    "-vf",
+                    f"subtitles='{ass_path}':fontsdir={_escape_filter_arg(FONTS_DIR)}",
+                ])
 
         cmd.extend([
             "-c:v", "libx264",
@@ -305,7 +328,7 @@ class VideoComposer:
             "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, "
             "BorderStyle, Outline, Shadow, Alignment, MarginL, "
             "MarginR, MarginV, Encoding",
-            f"Style: Default,思源黑体,{font_size},&H00FFFFFF,&H000000FF,"
+            f"Style: Default,{SUBTITLE_FONT_NAME},{font_size},&H00FFFFFF,&H000000FF,"
             "&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,1,2,"
             "10,10,30,1",
             "",
