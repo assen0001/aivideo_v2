@@ -141,7 +141,7 @@ onUnmounted(() => {
       <!-- ① 剧本创作：分镜文案 -->
       <AppCard v-if="activeStepKey === 'script'">
         <h3 class="mb-4 font-semibold text-text">① 剧本创作 · 分镜文案</h3>
-        <div v-if="scenes.length" class="space-y-3">
+        <div v-if="scenes.length" class="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div v-for="s in scenes" :key="s.scene_no" class="rounded-lg border border-border bg-surface-2 p-4">
             <div class="mb-1 flex items-center gap-2">
               <span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs text-white">#{{ s.scene_no }}</span>
@@ -182,7 +182,7 @@ onUnmounted(() => {
       <!-- ④ 语音合成：分镜配音 -->
       <AppCard v-else-if="activeStepKey === 'voice'">
         <h3 class="mb-4 font-semibold text-text">④ 语音合成 · 分镜配音</h3>
-        <div v-if="scenes.some(s => s.voice_path)" class="space-y-2">
+        <div v-if="scenes.some(s => s.voice_path)" class="grid grid-cols-1 gap-2 md:grid-cols-2">
           <div v-for="s in scenes" :key="s.scene_no" class="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface-2 px-4 py-3">
             <span class="text-xs text-text-3">#{{ s.scene_no }} {{ s.camera }}</span>
             <audio v-if="s.voice_path" :src="s.voice_path" controls preload="none" class="h-9 w-56" />
