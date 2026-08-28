@@ -45,4 +45,8 @@ video-platform/agents/__pycache__/*
 video-platform/models/__pycache__/*
 video-platform/services/__pycache__/*
 
+# Database files (runtime/import artifacts, do not commit)
+*.db
+doc/*.db
+
 
