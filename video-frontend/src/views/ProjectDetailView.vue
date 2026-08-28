@@ -218,7 +218,7 @@ onUnmounted(() => {
           <AppButton :disabled="recomposing" @click="trigger(refreshAfterRecompose)">
             {{ recomposing ? '合成中…' : '🔄 重新合成视频' }}
           </AppButton>
-          <p class="mt-2 text-xs text-text-3">使用现有分镜视频/语音/字幕按原方法重新合成，替换当前成片，无需重新生成素材</p>
+          <p class="mt-2 text-xs text-text-3">使用现有分镜视频/语音/字幕重新合成，替换当前成片。</p>
         </div>
       </AppCard>
     </template>
