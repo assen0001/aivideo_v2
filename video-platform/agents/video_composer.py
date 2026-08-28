@@ -22,12 +22,25 @@ from services.ffmpeg_utils import get_ffmpeg_path, get_ffprobe_path
 
 logger = logging.getLogger(__name__)
 
-# ============ 字幕字体（V2.7：内置字体，不依赖服务器系统字体） ============
-# 思源黑体简体 Regular（Apache 2.0 可商用），随仓库分发在 video-platform/assets/fonts/。
-# ffmpeg subtitles 滤镜通过 fontsdir 直接加载项目内字体，杜绝服务器缺中文字体导致
-# 字幕显示豆腐块的问题。Fontname 用字体内部英文 family 名，跨 fontconfig 环境稳定匹配。
+# ============ 字幕字体（V2.7：内置字体，兼容 Linux / Windows 部署） ============
+# OTF 字体文件本身跨平台，但 ffmpeg 加载机制不同：
+#   - Linux/macOS：libass 走 fontconfig provider，认 subtitles 滤镜的 fontsdir 参数。
+#     → 用项目内置思源黑体（Apache 2.0 可商用），随仓库分发在 video-platform/assets/fonts/，
+#       fontsdir 指向该目录，杜绝服务器缺中文字体导致字幕豆腐块。
+#   - Windows：libass 走 directwrite provider，**忽略 fontsdir**，直接查系统字体库。
+#     → 无需任何字体文件，Fontname 直接用系统自带的微软雅黑（Win7+ 全自带）即可。
 FONTS_DIR = os.path.join(_root, "assets", "fonts")
-SUBTITLE_FONT_NAME = "Source Han Sans SC"
+_FONT_FILE = os.path.join(FONTS_DIR, "SourceHanSansSC-Regular.otf")
+
+if sys.platform.startswith("win"):
+    # Windows：系统字体兜底，fontsdir 无效不传
+    SUBTITLE_FONT_NAME = "Microsoft YaHei"
+    SUBTITLE_FONTSDIR = None
+else:
+    # Linux/macOS：强制项目内置思源黑体
+    SUBTITLE_FONT_NAME = "Source Han Sans SC"
+    SUBTITLE_FONTSDIR = FONTS_DIR
+
 # ffmpeg 滤镜参数转义：Windows 盘符冒号 / 分隔符冒号需转义；路径统一用正斜杠。
 def _escape_filter_arg(p: str) -> str:
     return p.replace("\\", "/").replace(":", "\\:").replace(",", "\\,")
@@ -253,8 +266,8 @@ class VideoComposer:
                       temp_dir: Optional[str] = None):
         """最终合成：拼接视频（自带逐镜音轨） + 字幕内嵌（V2.3：不再混合外部音轨）
 
-        V2.7：字幕烧录强制指定项目内置字体目录 fontsdir=FONTS_DIR，
-        libass 直接从项目 fonts/ 加载思源黑体，不依赖服务器系统字体。
+        V2.7：字幕字体平台自适应 —— Linux/macOS 用 fontsdir 强制项目内置思源黑体，
+        Windows 用系统微软雅黑（directwrite 忽略 fontsdir，直接查系统字体）。
         """
         cmd = [self.ffmpeg, "-i", video_path]
 
@@ -265,23 +278,23 @@ class VideoComposer:
                 ass_path = os.path.join(temp_dir, "subtitles.ass")
                 with open(ass_path, "w", encoding="utf-8") as f:
                     f.write(subtitle_text)
-                # fontsdir 用相对路径（相对 ffmpeg 的 cwd=temp_dir）：
-                # 绝对路径含盘符冒号（D:\:）会被 ffmpeg filter 解析吃掉，Windows 必炸。
-                fonts_rel = os.path.relpath(FONTS_DIR, temp_dir).replace(os.sep, "/")
-                cmd.extend([
-                    "-vf",
-                    f"subtitles=subtitles.ass:fontsdir={fonts_rel}",
-                ])
+                vf = "subtitles=subtitles.ass"
+                if SUBTITLE_FONTSDIR:
+                    # fontsdir 用相对路径（相对 ffmpeg 的 cwd=temp_dir）：
+                    # 绝对路径含盘符冒号（D:\:）会被 ffmpeg filter 解析吃掉，Windows 必炸。
+                    fonts_rel = os.path.relpath(SUBTITLE_FONTSDIR, temp_dir).replace(os.sep, "/")
+                    vf += f":fontsdir={fonts_rel}"
+                cmd.extend(["-vf", vf])
                 ffmpeg_cwd = temp_dir
             else:
                 import tempfile
                 with tempfile.NamedTemporaryFile(suffix=".ass", mode="w", delete=False, encoding="utf-8") as f:
                     f.write(subtitle_text)
                     ass_path = f.name
-                cmd.extend([
-                    "-vf",
-                    f"subtitles='{ass_path}':fontsdir={_escape_filter_arg(FONTS_DIR)}",
-                ])
+                vf = f"subtitles='{ass_path}'"
+                if SUBTITLE_FONTSDIR:
+                    vf += f":fontsdir={_escape_filter_arg(SUBTITLE_FONTSDIR)}"
+                cmd.extend(["-vf", vf])
 
         cmd.extend([
             "-c:v", "libx264",

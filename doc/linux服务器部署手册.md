@@ -58,6 +58,11 @@ FastAPI 后端（gunicorn + UvicornWorker，仅监听 127.0.0.1:8000，不暴露
   用 `ffmpeg -version` 看输出里有 `--enable-libass --enable-fontconfig` 即 OK）。
   若历史视频曾出现中文字幕显示为方块（豆腐字），就是系统缺中文字体导致，
   V2.7 内置字体方案后重跑生成即可恢复。
+- 🔄 **Windows 部署兼容**（V2.7）：代码按平台自适应 —— Linux/macOS 用 fontsdir
+  加载项目内置思源黑体；**Windows 无需任何字体文件**，libass 在 Windows 走
+  directwrite provider（忽略 fontsdir、直接查系统字体库），代码自动改用系统自带
+  「微软雅黑」（Win7+ 全自带）。因此**不要**把 Windows 字体下载放进
+  `video-platform/assets/fonts/`（那个目录只对 Linux fontconfig 生效，Windows 不读）。
 
 ### 2.3 Node.js（仅本机构建前端用，服务器无需安装）
 - 前端在本机（Windows / macOS）执行 `npm run build` 产出 `dist/`，再上传 `dist/` 即可，服务器不需要 Node。
