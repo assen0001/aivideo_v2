@@ -601,14 +601,30 @@ def get_tutorial(tutorial_id: int) -> Optional[Dict[str, Any]]:
     return dict(row) if row else None
 
 
+def _sanitize_text(val: Any) -> Any:
+    """剔除代理对（lone surrogates，如 \\udcb6）。
+
+    SQLite 的 Python 驱动会用 UTF-8 编码参数，代理对字符无法编码，
+    会抛出 UnicodeEncodeError；且该字符一旦进入异常信息，连 print/logging 都会二次崩溃。
+    """
+    if not isinstance(val, str):
+        return val
+    return "".join(ch for ch in val if not (0xD800 <= ord(ch) <= 0xDFFF))
+
+
 def insert_tutorial(row: Dict[str, Any]) -> int:
+    # 对所有文本字段兜底清洗，杜绝任何来源的代理对字符写入 SQLite
+    title = _sanitize_text(str(row.get("title", "")))
+    summary = _sanitize_text(str(row.get("summary", "")))
+    cover = _sanitize_text(str(row.get("cover", "")))
+    content = _sanitize_text(str(row.get("content", "")))
+    tags = _sanitize_text(str(row.get("tags", "")))
     with closing(get_connection()) as conn:
         with conn:
             cur = conn.execute(
                 "INSERT INTO tutorials(title, summary, cover, content, tags, is_published, sort_order, updated_at) "
                 "VALUES(?, ?, ?, ?, ?, 1, ?, datetime('now','localtime'))",
-                (row["title"], row.get("summary", ""), row.get("cover", ""),
-                 row.get("content", ""), row.get("tags", ""), int(row.get("sort_order", 0))),
+                (title, summary, cover, content, tags, int(row.get("sort_order", 0))),
             )
             return int(cur.lastrowid)
 
@@ -634,30 +650,50 @@ def delete_tutorial(tutorial_id: int) -> None:
 # 启动钩子
 # ============================================================
 def import_docs_if_empty(doc_dir: Path) -> int:
-    """tutorials 空表时导入 doc/*.md 全部文档（不过滤，① 决策）"""
-    if count_tutorials() > 0:
+    """tutorials 空表时导入 doc/*.md 全部文档（容错：单文件/单字符异常均不影响启动）"""
+    try:
+        if count_tutorials() > 0:
+            return 0
+        doc_path = Path(doc_dir)
+        if not doc_path.exists():
+            return 0
+        md_files = sorted(doc_path.glob("*.md"))
+        imported = 0
+        for idx, f in enumerate(md_files):
+            try:
+                try:
+                    content = f.read_text(encoding="utf-8", errors="replace")
+                except Exception:
+                    # 读取都失败则跳过该文件，不阻塞整体启动
+                    _safe_log(f"[startup] 读取教程失败（跳过）: {f.name}")
+                    continue
+                # 去除代理对/非法字符（双重保险，insert_tutorial 内也会清洗）
+                content = _sanitize_text(content)
+                summary = _sanitize_text(content[:100].replace("\n", " ").strip())
+                insert_tutorial({
+                    "title": f.stem,
+                    "summary": summary,
+                    "cover": "",
+                    "content": content,
+                    "tags": "项目文档",
+                    "sort_order": idx,
+                })
+                imported += 1
+            except Exception as e:
+                # 单篇导入失败只跳过，且日志打印本身也要防代理对二次崩溃
+                _safe_log(f"[startup] 导入教程失败（已跳过）: {f.name} -> {_sanitize_text(str(e))}")
+        return imported
+    except Exception as e:
+        _safe_log(f"[startup] import_docs_if_empty 异常（已忽略，不影响启动）: {_sanitize_text(str(e))}")
         return 0
-    doc_path = Path(doc_dir)
-    if not doc_path.exists():
-        return 0
-    md_files = sorted(doc_path.glob("*.md"))
-    imported = 0
-    for idx, f in enumerate(md_files):
-        try:
-            content = f.read_text(encoding="utf-8")
-        except Exception:
-            continue
-        summary = content[:100].replace("\n", " ").strip()
-        insert_tutorial({
-            "title": f.stem,
-            "summary": summary,
-            "cover": "",
-            "content": content,
-            "tags": "项目文档",
-            "sort_order": idx,
-        })
-        imported += 1
-    return imported
+
+
+def _safe_log(msg: str) -> None:
+    """日志打印，msg 中的代理对字符先清洗，避免 print 二次抛 UnicodeEncodeError。"""
+    try:
+        print(_sanitize_text(str(msg)), flush=True)
+    except Exception:
+        pass
 
 
 def recover_interrupted_projects() -> int:
