@@ -222,11 +222,15 @@ def save_settings(values: Dict[str, str]) -> None:
     with closing(get_connection()) as conn:
         with conn:
             for key, value in values.items():
-                conn.execute(
-                    "INSERT INTO settings(key, value, updated_at) VALUES(?, ?, datetime('now','localtime')) "
-                    "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=datetime('now','localtime')",
-                    (key, str(value)),
+                cur = conn.execute(
+                    "UPDATE settings SET value=?, updated_at=datetime('now','localtime') WHERE key=?",
+                    (str(value), key),
                 )
+                if cur.rowcount == 0:
+                    conn.execute(
+                        "INSERT INTO settings(key, value, updated_at) VALUES(?, ?, datetime('now','localtime'))",
+                        (key, str(value)),
+                    )
     refresh_settings_cache()
 
 
@@ -458,28 +462,35 @@ def upsert_scene(project_id: str, scene: Dict[str, Any]) -> None:
 
     分镜级实时写库使用：每生成一个分镜产物（图片/视频/语音）立即写库，
     前端 3s 轮询详情即可看到该分镜，无需等整个阶段跑完。
-    依赖 scenes 表 UNIQUE(project_id, scene_no) 约束（SQLite ON CONFLICT DO UPDATE，需 3.24+）。
+    依赖 scenes 表 UNIQUE(project_id, scene_no) 约束；用 UPDATE + 行不存在再 INSERT 兼容旧版 SQLite（<3.24）。
     """
     with closing(get_connection()) as conn:
         with conn:
-            conn.execute(
-                "INSERT INTO scenes(project_id, scene_no, duration, description, narration, subtitle, "
-                "t2i_prompt, i2v_prompt, camera, image_url, video_url, voice_path, voice_duration, status) "
-                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
-                "ON CONFLICT(project_id, scene_no) DO UPDATE SET "
-                "duration=excluded.duration, description=excluded.description, narration=excluded.narration, "
-                "subtitle=excluded.subtitle, t2i_prompt=excluded.t2i_prompt, i2v_prompt=excluded.i2v_prompt, "
-                "camera=excluded.camera, image_url=excluded.image_url, video_url=excluded.video_url, "
-                "voice_path=excluded.voice_path, voice_duration=excluded.voice_duration, status=excluded.status",
+            cur = conn.execute(
+                "UPDATE scenes SET duration=?, description=?, narration=?, subtitle=?, t2i_prompt=?, "
+                "i2v_prompt=?, camera=?, image_url=?, video_url=?, voice_path=?, voice_duration=?, status=? "
+                "WHERE project_id=? AND scene_no=?",
                 (
-                    project_id,
-                    int(scene["scene_no"]), float(scene.get("duration", 5)),
-                    scene.get("description", ""), scene.get("narration", ""), scene.get("subtitle", ""),
-                    scene.get("t2i_prompt", ""), scene.get("i2v_prompt", ""), scene.get("camera", ""),
-                    scene.get("image_url", ""), scene.get("video_url", ""), scene.get("voice_path", ""),
-                    float(scene.get("voice_duration", 0) or 0), scene.get("status", "待生成"),
+                    float(scene.get("duration", 5)), scene.get("description", ""), scene.get("narration", ""),
+                    scene.get("subtitle", ""), scene.get("t2i_prompt", ""), scene.get("i2v_prompt", ""),
+                    scene.get("camera", ""), scene.get("image_url", ""), scene.get("video_url", ""),
+                    scene.get("voice_path", ""), float(scene.get("voice_duration", 0) or 0),
+                    scene.get("status", "待生成"), project_id, int(scene["scene_no"]),
                 ),
             )
+            if cur.rowcount == 0:
+                conn.execute(
+                    "INSERT INTO scenes(project_id, scene_no, duration, description, narration, subtitle, "
+                    "t2i_prompt, i2v_prompt, camera, image_url, video_url, voice_path, voice_duration, status) "
+                    "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        project_id, int(scene["scene_no"]), float(scene.get("duration", 5)),
+                        scene.get("description", ""), scene.get("narration", ""), scene.get("subtitle", ""),
+                        scene.get("t2i_prompt", ""), scene.get("i2v_prompt", ""), scene.get("camera", ""),
+                        scene.get("image_url", ""), scene.get("video_url", ""), scene.get("voice_path", ""),
+                        float(scene.get("voice_duration", 0) or 0), scene.get("status", "待生成"),
+                    ),
+                )
 
 
 def get_scenes(project_id: str) -> List[Dict[str, Any]]:
