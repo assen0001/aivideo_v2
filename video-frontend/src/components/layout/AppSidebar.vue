@@ -14,7 +14,7 @@ const route = useRoute()
 const navs = [
   { path: '/create', label: '创作', icon: '✦' },
   { path: '/projects', label: '项目', icon: '▦' },
-  { path: '/assets', label: '资产', icon: '◫' },
+  { path: '/assets-list', label: '资产', icon: '◫' },
   { path: '/tutorials', label: '教程', icon: '☰' },
   { path: '/settings', label: '配置', icon: '⚙' },
 ]
