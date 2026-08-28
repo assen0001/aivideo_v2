@@ -11,6 +11,7 @@ import AppVideo from '@/components/common/AppVideo.vue'
 import AppSkeleton from '@/components/common/AppSkeleton.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import StepFlow from '@/components/create/StepFlow.vue'
+import { useRecompose } from '@/composables/useRecompose'
 import { voiceLabel } from '@/constants/voice'
 import type { Project, ProjectStatus } from '@/types'
 
@@ -29,6 +30,15 @@ const localStatus = ref<ProjectStatus | null>(null)
 let pollTimer: number | null = null
 /** 阶段内容选中：点击阶段名切换显示，默认「视频合成」 */
 const activeStepKey = ref('compose')
+
+/** 重新合成视频（V2.7）：复用现有分镜素材只重跑 compose，替换成片 */
+const { recomposing, recomposedTs, trigger } = useRecompose(() => projectId)
+/** 成片播放地址：重新合成成功后拼 ?ts= 破除浏览器缓存（路径不变） */
+const displayFinalUrl = computed(() => {
+  const url = detail.value?.final_video_url
+  if (!url) return ''
+  return recomposedTs.value ? `${url}?ts=${recomposedTs.value}` : url
+})
 
 const scenes = computed(() => detail.value?.scenes || [])
 const configItems = computed(() => {
@@ -81,6 +91,12 @@ async function confirmDelete() {
   } finally {
     deleting.value = false
   }
+}
+
+/** 重新合成完成：刷新详情（final_video_url 已更新，视频组件靠 displayFinalUrl 的 ?ts= 破缓存） */
+async function refreshAfterRecompose() {
+  await load()
+  await loadStatus()
 }
 
 onMounted(() => {
@@ -183,7 +199,7 @@ onUnmounted(() => {
         <!-- 成片播放 -->
         <div v-if="detail.final_video_url">
           <h4 class="mb-2 text-sm font-medium text-text-2">成片</h4>
-          <AppVideo :src="detail.final_video_url" />
+          <AppVideo :src="displayFinalUrl" />
         </div>
         <p v-else class="text-sm text-text-3">成片尚未生成</p>
 
@@ -195,6 +211,14 @@ onUnmounted(() => {
               {{ c.label }}：{{ c.value }}
             </span>
           </div>
+        </div>
+
+        <!-- 重新合成视频（V2.7）：复用现有分镜素材只重跑 compose，替换成片 -->
+        <div v-if="detail.status === '完成' || detail.status === '失败'" class="mt-6">
+          <AppButton :disabled="recomposing" @click="trigger(refreshAfterRecompose)">
+            {{ recomposing ? '合成中…' : '🔄 重新合成视频' }}
+          </AppButton>
+          <p class="mt-2 text-xs text-text-3">使用现有分镜视频/语音/字幕按原方法重新合成，替换当前成片，无需重新生成素材</p>
         </div>
       </AppCard>
     </template>
