@@ -82,6 +82,35 @@ def _scene_to_row(scene: Scene, project_id: str) -> Dict[str, Any]:
     }
 
 
+# scenes 表 status → TaskStatus（_SCENE_STATUS_MAP 反向，recompose 重建内存对象用）
+_DB_SCENE_STATUS_MAP = {
+    "待生成": TaskStatus.PENDING,
+    "生成中": TaskStatus.IN_PROGRESS,
+    "完成": TaskStatus.COMPLETED,
+    "失败": TaskStatus.FAILED,
+}
+
+
+def _db_row_to_scene(row: Dict[str, Any]) -> Scene:
+    """scenes 表行 → Scene 内存对象（DB 相对项目根路径 → 绝对路径，供 compose 复用）"""
+    db_status = row.get("status", "待生成")
+    return Scene(
+        scene_id=int(row["scene_no"]),
+        duration=int(row.get("duration") or 5),
+        description=row.get("description", ""),
+        narration=row.get("narration", ""),
+        subtitle=row.get("subtitle", ""),
+        t2i_prompt=row.get("t2i_prompt", ""),
+        i2v_prompt=row.get("i2v_prompt", ""),
+        camera=row.get("camera", ""),
+        image_path=str(db.PROJECT_ROOT / row["image_url"]) if row.get("image_url") else None,
+        video_path=str(db.PROJECT_ROOT / row["video_url"]) if row.get("video_url") else None,
+        voice_path=str(db.PROJECT_ROOT / row["voice_path"]) if row.get("voice_path") else None,
+        voice_duration=float(row.get("voice_duration") or 0) or None,
+        status=_DB_SCENE_STATUS_MAP.get(db_status, TaskStatus.PENDING),
+    )
+
+
 def _build_video_config(snap_vc: Dict[str, Any]) -> VideoConfig:
     """从 config_snapshot 的 video_config 构建 VideoConfig"""
     # V2.4：voice 可能为 "none"（无配音），需容错转换；V2.5：历史中文值回退 NONE
@@ -285,6 +314,91 @@ class GenerationManager:
 
         except Exception as e:
             logger.error(f"[{project_id}] 生成失败: {e}")
+            try:
+                db.update_project_status(project_id, "失败", str(e)[:500])
+            except Exception:
+                logger.exception(f"[{project_id}] 写库失败状态时异常")
+            cls._set_progress(project_id, "error", 0, str(e)[:500])
+
+        finally:
+            cls.release(project_id)
+
+    # ============ 重新合成视频（V2.7：只重跑 compose，不重新生成素材） ============
+    @classmethod
+    def recompose(cls, project_id: str) -> bool:
+        """只重跑 compose 一步：复用现有分镜 video/voice/字幕按原方法重新合成成片。
+
+        与正常生成共享同一把单并发锁（try_start/release）。
+        依赖 DB scenes 表已有 image_url/video_url/voice_path 全量齐全。
+        返回 True=成功启动后台线程；False=锁被占（有项目在创作中）。
+        """
+        if not cls.try_start(project_id):
+            return False
+        cls._set_progress(project_id, "compose", STEP_PROGRESS["compose"])
+        thread = threading.Thread(target=cls._recompose_worker, args=(project_id,), daemon=True)
+        thread.start()
+        return True
+
+    @classmethod
+    def _recompose_worker(cls, project_id: str) -> None:
+        """后台 worker：DB 重建 Project → compose → 写库。失败保留旧成片文件。"""
+        try:
+            row = db.get_project(project_id)
+            if not row:
+                raise RuntimeError(f"项目不存在: {project_id}")
+
+            # ① 校验分镜素材齐全（video 必须有且文件存在）
+            db_scenes = db.get_scenes(project_id)
+            if not db_scenes:
+                raise RuntimeError("项目没有分镜数据，无法重新合成")
+            missing = [
+                s.get("scene_no")
+                for s in db_scenes
+                if not s.get("video_url")
+                or not (db.PROJECT_ROOT / s["video_url"]).exists()
+            ]
+            if missing:
+                raise RuntimeError(
+                    f"以下分镜缺少视频文件，无法重新合成: {missing[:10]}"
+                    "（请先完成一次完整生成）"
+                )
+
+            # ② DB 行 → Scene 内存对象，重建 Project（config 从快照恢复）
+            try:
+                snap = json.loads(row.get("config_snapshot") or "{}")
+            except json.JSONDecodeError:
+                snap = {}
+            if not isinstance(snap, dict):
+                snap = {}
+            video_config = _build_video_config(snap.get("video_config", {}))
+            project = Project(
+                project_id=project_id,
+                name=row.get("name", ""),
+                topic=row.get("topic", ""),
+                config=video_config,
+                scenes=[_db_row_to_scene(s) for s in db_scenes],
+            )
+
+            # ③ 状态推进 + compose（路径不变，自动覆盖旧成片；失败时旧文件保留）
+            db.update_project_status(project_id, "进行中")
+            composer = VideoComposer(ffmpeg_path=get_ffmpeg_path())
+            final_path = composer.compose(project, output_base=str(db.OUTPUT_DIR))
+            final_rel = db.relpath_of(final_path)
+            db.update_project_final(project_id, final_rel)
+            logger.info(f"[{project_id}] 重新合成完成: {final_rel}")
+
+            cls._set_progress(project_id, "done", STEP_PROGRESS["done"])
+
+        except StopGeneration as e:
+            logger.warning(f"[{project_id}] 重新合成被停止: {e}")
+            try:
+                db.update_project_status(project_id, "失败", str(e)[:500])
+            except Exception:
+                logger.exception(f"[{project_id}] 写停止状态时异常")
+            cls._set_progress(project_id, "error", 0, str(e)[:500])
+
+        except Exception as e:
+            logger.error(f"[{project_id}] 重新合成失败: {e}")
             try:
                 db.update_project_status(project_id, "失败", str(e)[:500])
             except Exception:

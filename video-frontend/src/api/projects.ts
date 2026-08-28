@@ -28,6 +28,11 @@ export function stopGenerate(projectId: string) {
   return http.post<never, { project_id: string; status: string }>(`/projects/${projectId}/stop`)
 }
 
+/** 重新合成视频（V2.7）：复用现有分镜素材只重跑 compose，替换成片 */
+export function recomposeProject(projectId: string) {
+  return http.post<never, { project_id: string; status: string }>(`/projects/${projectId}/recompose`)
+}
+
 export function getProjectStatus(projectId: string) {
   return http.get<never, ProjectStatus>(`/projects/${projectId}/status`)
 }

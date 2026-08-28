@@ -243,7 +243,7 @@ onMounted(async () => {
       <!-- ⑤ 成片 -->
       <AppCard v-else-if="activeStepKey === 'compose' && detail.final_video_url">
         <h3 class="mb-4 font-semibold text-text">⑤ 成片</h3>
-        <ResultPlayer :video-url="detail.final_video_url" :download-url="detail.download_url" :name="detail.name" />
+        <ResultPlayer :video-url="detail.final_video_url" :download-url="detail.download_url" :name="detail.name" :project-id="store.currentProjectId" @recomposed="loadDetail" />
       </AppCard>
 
       <!-- 选中阶段暂无产物的占位提示 -->

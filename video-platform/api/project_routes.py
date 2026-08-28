@@ -316,6 +316,26 @@ def delete_project(project_id: str):
 
 
 # ============================================================
+# 重新合成视频（V2.7：只重跑 compose，复用现有分镜素材，替换成片）
+# ============================================================
+@router.post("/{project_id}/recompose")
+def recompose_project(project_id: str):
+    """用现有分镜 video/voice/字幕按原合成方法重新合成成片，替换物理文件与 DB 记录。
+
+    与正常生成共享单并发锁；失败时旧成片文件保留、status 置「失败」。
+    """
+    row = db.get_project(project_id)
+    if not row:
+        raise http_error(404, "项目不存在")
+    if row.get("status") in ("等待", "进行中"):
+        raise http_error(400, "项目未完成生成，无法重新合成")
+    if not GenerationManager.recompose(project_id):
+        raise http_error(400, "当前已有项目正在创作中，请稍后再试")
+    logger.info(f"项目 {project_id} 重新合成已启动")
+    return {"project_id": project_id, "status": "recomposing"}
+
+
+# ============================================================
 # 下载成片
 # ============================================================
 @router.get("/{project_id}/download")
